@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8" />
+  <script>
+    (function () {
+      try {
+        var expires = 'Thu, 01 Jan 1970 00:00:00 GMT';
+        var parts = document.cookie ? document.cookie.split(';') : [];
+        var paths = ['/', location.pathname || '/'];
+        var domains = [location.hostname];
+        parts.forEach(function (part) {
+          var idx = part.indexOf('=');
+          var name = (idx > -1 ? part.slice(0, idx) : part).trim();
+          if (!name) return;
+          paths.forEach(function (path) {
+            document.cookie = name + '=; expires=' + expires + '; path=' + path;
+            domains.forEach(function (domain) {
+              document.cookie = name + '=; expires=' + expires + '; path=' + path + '; domain=' + domain;
+            });
+          });
+        });
+      } catch (e) { }
+      if (!('serviceWorker' in navigator)) return;
+      try {
+        navigator.serviceWorker.getRegistrations().then(function (registrations) {
+          registrations.forEach(function (registration) {
+            registration.unregister().catch(function () { });
+          });
+        }).catch(function () { });
+        if (navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({ type: 'GALINA_DISABLE_SW' });
+        }
+      } catch (e) { }
+    })();
+  </script>
+  <!-- До React и import: все fetch к /api без Cookie (иначе Apache400 при длинном Cookie от Метрики и др.). -->
+  <script>
+    (function () {
+      if (typeof window === 'undefined' || !window.fetch) return;
+      function normPath(p) {
+        var s = String(p || '/').replace(/\/{2,}/g, '/');
+        return s || '/';
+      }
+      function isApiPathUrl(urlStr) {
+        try {
+          var u = urlStr.charAt(0) === '/'
+            ? new URL(urlStr, window.location.origin)
+            : new URL(urlStr);
+          var path = normPath(u.pathname);
+          return path === '/api' || path.indexOf('/api/') === 0;
+        } catch (e) {
+          return false;
+        }
+      }
+      function urlFromInput(input) {
+        if (typeof input === 'string') return input;
+        if (typeof URL !== 'undefined' && input instanceof URL) return input.href;
+        if (typeof Request !== 'undefined' && input instanceof Request) return input.url;
+        return '';
+      }
+      var nativeFetch = window.fetch.bind(window);
+      window.fetch = function (input, init) {
+        var urlStr = urlFromInput(input);
+        if (!urlStr || !isApiPathUrl(urlStr)) return nativeFetch(input, init);
+        var o = init ? Object.assign({}, init) : {};
+        o.credentials = 'omit';
+        o.referrerPolicy = 'no-referrer';
+        if (typeof Request !== 'undefined' && input instanceof Request) {
+          return nativeFetch(new Request(input, o));
+        }
+        return nativeFetch(input, o);
+      };
+    })();
+  </script>
+  <script>
+    (function () {
+      function isNewsUrl(value) {
+        try {
+          var url = new URL(value, location.href);
+          return url.origin === location.origin &&
+            (url.pathname === '/news' || url.pathname.indexOf('/news/') === 0);
+        } catch (e) {
+          return false;
+        }
+      }
+
+      if (isNewsUrl(location.href)) {
+        location.replace('/');
+        return;
+      }
+
+      function hideNewsLinks() {
+        document.querySelectorAll('a[href]').forEach(function (link) {
+          if (isNewsUrl(link.href)) {
+            link.hidden = true;
+            link.setAttribute('aria-hidden', 'true');
+            link.setAttribute('tabindex', '-1');
+          }
+        });
+      }
+
+      document.addEventListener('click', function (event) {
+        var link = event.target && event.target.closest
+          ? event.target.closest('a[href]')
+          : null;
+        if (!link || !isNewsUrl(link.href)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        location.assign('/');
+      }, true);
+
+      ['pushState', 'replaceState'].forEach(function (methodName) {
+        var nativeMethod = history[methodName];
+        history[methodName] = function () {
+          if (arguments[2] && isNewsUrl(arguments[2])) {
+            location.assign('/');
+            return;
+          }
+          var result = nativeMethod.apply(this, arguments);
+          hideNewsLinks();
+          return result;
+        };
+      });
+
+      document.addEventListener('DOMContentLoaded', hideNewsLinks);
+      new MutationObserver(hideNewsLinks).observe(document.documentElement, {
+        childList: true,
+        subtree: true
+      });
+    })();
+  </script>
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Windexs AI-Юрист</title>
+  <meta name="description"
+    content="AI-юрист Галина от Windexs - интеллектуальный помощник для анализа документов, заполнения форм и юридических консультаций 24/7. Современные технологии для решения юридических задач." />
+  <meta name="author" content="Windexs" />
+
+  <!-- Cache busting -->
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+
+  <meta property="og:title" content="Галина - AI-Юрист от Windexs" />
+  <meta property="og:description"
+    content="Профессиональная юридическая помощь с использованием искусственного интеллекта. Анализ документов, консультации и заполнение форм 24/7." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="manifest" href="/site.webmanifest" />
+  <style>
+    /* Voice consultation is audio-only: hide the rendered text transcript. */
+    .mt-4.p-4.bg-slate-50.max-h-40.overflow-y-auto.text-left {
+      display: none !important;
+    }
+  </style>
+
+  <!-- Yandex.Metrika counter -->
+  <script type="text/javascript">
+    (function(m,e,t,r,i,k,a){
+      m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+      m[i].l=1*new Date();
+      for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+      k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=104129761', 'ym');
+
+    ym(104129761, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", referrer: document.referrer, url: location.href, accurateTrackBounce:true, trackLinks:true});
+  </script>
+  <!-- /Yandex.Metrika counter -->
+
+  <!-- Top.Mail.Ru counter -->
+  <script type="text/javascript">
+    var _tmr = window._tmr || (window._tmr = []);
+    _tmr.push({id: "3769671", type: "pageView", start: (new Date()).getTime()});
+    (function (d, w, id) {
+      if (d.getElementById(id)) return;
+      var ts = d.createElement("script"); ts.type = "text/javascript"; ts.async = true; ts.id = id;
+      ts.src = "https://top-fwz1.mail.ru/js/code.js";
+      var f = function () {var s = d.getElementsByTagName("script")[0]; s.parentNode.insertBefore(ts, s);};
+      if (w.opera == "[object Opera]") { d.addEventListener("DOMContentLoaded", f, false); } else { f(); }
+    })(document, window, "tmr-code");
+  </script>
+  <!-- /Top.Mail.Ru counter -->
+  <script type="module" crossorigin src="/assets/main-DnCpiuHb.js"></script>
+  <link rel="stylesheet" crossorigin href="/assets/main-C16KRDUb.css">
+  <style>
+    [data-notes-trigger] {
+      cursor: pointer;
+      border-radius: 0.5rem;
+      padding-right: 0.5rem;
+      transition: background-color 180ms ease, color 180ms ease;
+    }
+    [data-notes-trigger]:hover {
+      background-color: rgb(22 163 74 / 0.1);
+    }
+    [data-notes-trigger] button,
+    [data-notes-trigger] button:hover {
+      background-color: transparent !important;
+    }
+    [data-notes-trigger]:hover button,
+    [data-notes-trigger]:hover span {
+      color: #16a34a !important;
+    }
+    .voice-balance-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      background: rgb(15 23 42 / 0.7);
+      backdrop-filter: blur(4px);
+    }
+    .voice-balance-modal__card {
+      width: min(100%, 28rem);
+      border-radius: 1rem;
+      background: white;
+      padding: 1.5rem;
+      box-shadow: 0 24px 64px rgb(0 0 0 / 0.3);
+      text-align: center;
+    }
+    .voice-balance-modal__icon {
+      display: flex;
+      width: 3.5rem;
+      height: 3.5rem;
+      margin: 0 auto 1rem;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9999px;
+      background: #fef2f2;
+      color: #dc2626;
+      font-size: 1.75rem;
+      font-weight: 700;
+    }
+    .voice-balance-modal__title {
+      margin: 0 0 0.5rem;
+      color: #0f172a;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+    .voice-balance-modal__message {
+      margin: 0 0 1.25rem;
+      color: #64748b;
+      line-height: 1.5;
+    }
+    .voice-balance-modal__actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+    .voice-balance-modal__button {
+      flex: 1;
+      min-height: 2.75rem;
+      border: 0;
+      border-radius: 0.65rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .voice-balance-modal__button--cancel {
+      background: #f1f5f9;
+      color: #334155;
+    }
+    .voice-balance-modal__button--topup {
+      background: #16a34a;
+      color: white;
+    }
+    .voice-balance-modal__button--topup:hover {
+      background: #15803d;
+    }
+    .vk-id-oauth-container {
+      margin-top: 0.75rem;
+      min-height: 3rem;
+    }
+    .vk-id-oauth-error {
+      margin-top: 0.5rem;
+      color: #dc2626;
+      font-size: 0.875rem;
+      text-align: center;
+    }
+  </style>
+  <script>
+    // В шапке NotesPanel рендерит кликабельной только иконку, а подпись —
+    // отдельним соседним span. Делегируем подпись той же кнопке открытия.
+    (function () {
+      function getNotesLabel(target) {
+        if (!(target instanceof Element)) return null;
+        var label = target.closest('span');
+        if (!label || label.textContent.trim() !== 'Заметки') return null;
+        var container = label.parentElement;
+        return container && container.querySelector('button') ? label : null;
+      }
+
+      document.addEventListener('click', function (event) {
+        if (!(event.target instanceof Element)) return;
+        var container = event.target.closest('[data-notes-trigger]');
+        if (!container || event.target.closest('button')) return;
+        container.querySelector('button').click();
+      });
+
+      document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        var label = getNotesLabel(event.target);
+        if (!label) return;
+        event.preventDefault();
+        label.parentElement.querySelector('button').click();
+      });
+
+      function markNotesLabel() {
+        document.querySelectorAll('span').forEach(function (label) {
+          if (getNotesLabel(label)) {
+            label.style.cursor = 'pointer';
+            label.setAttribute('role', 'button');
+            label.setAttribute('tabindex', '0');
+            label.parentElement.setAttribute('data-notes-trigger', '');
+          }
+        });
+      }
+
+      new MutationObserver(markNotesLabel).observe(document.documentElement, {
+        childList: true,
+        subtree: true
+      });
+      document.addEventListener('DOMContentLoaded', markNotesLabel);
+    })();
+  </script>
+  <script>
+    (function () {
+      function closeVoiceBalanceModal() {
+        var modal = document.querySelector('.voice-balance-modal');
+        if (modal) modal.remove();
+      }
+
+      function showVoiceBalanceModal(detail) {
+        closeVoiceBalanceModal();
+
+        var modal = document.createElement('div');
+        modal.className = 'voice-balance-modal';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-labelledby', 'voice-balance-title');
+        modal.innerHTML =
+          '<div class="voice-balance-modal__card">' +
+            '<div class="voice-balance-modal__icon">₽</div>' +
+            '<h2 id="voice-balance-title" class="voice-balance-modal__title">Недостаточно средств</h2>' +
+            '<p class="voice-balance-modal__message"></p>' +
+            '<div class="voice-balance-modal__actions">' +
+              '<button type="button" class="voice-balance-modal__button voice-balance-modal__button--cancel">Закрыть</button>' +
+              '<button type="button" class="voice-balance-modal__button voice-balance-modal__button--topup">Пополнить баланс</button>' +
+            '</div>' +
+          '</div>';
+
+        modal.querySelector('.voice-balance-modal__message').textContent =
+          detail && detail.message
+            ? detail.message
+            : 'Баланс закончился. Пополните его, чтобы продолжить голосовой разговор.';
+        modal.querySelector('.voice-balance-modal__button--cancel').onclick = closeVoiceBalanceModal;
+        modal.querySelector('.voice-balance-modal__button--topup').onclick = function () {
+          window.location.href = '/dashboard?topup=1';
+        };
+        modal.onclick = function (event) {
+          if (event.target === modal) closeVoiceBalanceModal();
+        };
+        document.body.appendChild(modal);
+        modal.querySelector('.voice-balance-modal__button--topup').focus();
+      }
+
+      window.addEventListener('voice-insufficient-balance', function (event) {
+        showVoiceBalanceModal(event.detail || {});
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeVoiceBalanceModal();
+      });
+
+      function openTopupFromUrl() {
+        if (new URLSearchParams(window.location.search).get('topup') !== '1') return;
+
+        var observer = new MutationObserver(function () {
+          var button = Array.from(document.querySelectorAll('button')).find(function (item) {
+            return item.textContent.trim() === 'Пополнить';
+          });
+          if (!button) return;
+
+          observer.disconnect();
+          button.click();
+          window.history.replaceState({}, '', '/dashboard');
+        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
+        setTimeout(function () { observer.disconnect(); }, 10000);
+      }
+
+      document.addEventListener('DOMContentLoaded', openTopupFromUrl);
+    })();
+  </script>
+  <script src="/assets/vkid-sdk-2.6.7.js"></script>
+  <script>
+    (function () {
+      var initialized = false;
+
+      function showVkError(container, error) {
+        console.error('[VK ID]', error);
+        var message = container.parentElement.querySelector('.vk-id-oauth-error');
+        if (!message) {
+          message = document.createElement('p');
+          message.className = 'vk-id-oauth-error';
+          container.insertAdjacentElement('afterend', message);
+        }
+        message.textContent = 'Не удалось войти через VK ID. Попробуйте ещё раз.';
+      }
+
+      async function finishVkLogin(container, data) {
+        var accessToken = data && (data.access_token || data.accessToken);
+        if (!accessToken) throw new Error('VK ID did not return an access token');
+
+        var response = await fetch('/api/auth/vk/sdk-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken: accessToken })
+        });
+        var result = await response.json();
+        if (!response.ok || !result.token) {
+          throw new Error(result.error || 'VK token exchange failed');
+        }
+        window.location.href = '/chat?token=' + encodeURIComponent(result.token);
+      }
+
+      function initializeVkSdk() {
+        if (!('VKIDSDK' in window)) return false;
+        if (initialized) return true;
+
+        var VKID = window.VKIDSDK;
+        VKID.Config.init({
+          app: 54700354,
+          redirectUrl: 'https://lawyer.windexs.ru/api/auth/vk/callback',
+          responseMode: VKID.ConfigResponseMode.Callback,
+          source: VKID.ConfigSource.LOWCODE,
+          scope: 'email'
+        });
+        initialized = true;
+        return true;
+      }
+
+      // Если SDK не загрузился (блокировщик, сеть), показываем обычную кнопку
+      // на серверный OAuth: он работает без стороннего скрипта.
+      function renderVkFallbackButton(anchorButton) {
+        var fallback = document.createElement('button');
+        fallback.type = 'button';
+        fallback.className = anchorButton.className;
+        fallback.style.marginTop = '0.75rem';
+        fallback.textContent = 'Войти через VK ID';
+        fallback.onclick = function () {
+          window.location.href = '/api/auth/vk/login';
+        };
+        anchorButton.insertAdjacentElement('afterend', fallback);
+      }
+
+      function renderVkOAuthLists() {
+        var sdkReady = initializeVkSdk();
+        var VKID = window.VKIDSDK;
+
+        document.querySelectorAll('button').forEach(function (yandexButton) {
+          var text = yandexButton.textContent.trim();
+          if (text !== 'Войти через Яндекс' && text !== 'Зарегистрироваться через Яндекс') return;
+          if (yandexButton.dataset.vkWidgetAdded) return;
+
+          if (!sdkReady) {
+            if (document.readyState !== 'complete') return;
+            yandexButton.dataset.vkWidgetAdded = '1';
+            renderVkFallbackButton(yandexButton);
+            return;
+          }
+
+          yandexButton.dataset.vkWidgetAdded = '1';
+
+          var container = document.createElement('div');
+          container.className = 'vk-id-oauth-container';
+          yandexButton.insertAdjacentElement('afterend', container);
+
+          var oneTap = new VKID.OneTap();
+          oneTap.render({
+            container: container,
+            showAlternativeLogin: true,
+            oauthList: ['mail_ru', 'ok_ru'],
+            styles: { borderRadius: 8, height: 44 }
+          })
+          .on(VKID.WidgetEvents.ERROR, function (error) {
+            showVkError(container, error);
+          })
+          .on(VKID.OneTapInternalEvents.LOGIN_SUCCESS, function (payload) {
+            VKID.Auth.exchangeCode(payload.code, payload.device_id)
+              .then(function (data) { return finishVkLogin(container, data); })
+              .catch(function (error) { showVkError(container, error); });
+          });
+        });
+      }
+
+      new MutationObserver(renderVkOAuthLists).observe(document.documentElement, {
+        childList: true,
+        subtree: true
+      });
+      window.addEventListener('load', renderVkOAuthLists);
+      document.addEventListener('DOMContentLoaded', renderVkOAuthLists);
+      setInterval(renderVkOAuthLists, 1000);
+    })();
+  </script>
+</head>
+
+<!-- BUILD: 2026-04-17-NO-SW-NO-REFERRER -->
+
+<body>
+  <div id="root"></div>
+  <script>
+    (function () {
+      var LOGIN = "https://lawyer.windexs.ru/login";
+      document.addEventListener("click", function (e) {
+        var el = e.target && e.target.closest && e.target.closest("a, button");
+        if (!el) return;
+        // карусель: стрелки листания оставляем рабочими
+        if (el.closest(".slider-nav, .slider-carousel")) {
+          if (el.classList && (el.classList.contains("slider-nav") || el.classList.contains("prev") || el.classList.contains("next"))) {
+            return;
+          }
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        window.location.href = LOGIN;
+      }, true);
+    })();
+  </script>
+  <script src="/voice-maintenance.js"></script>
+  <noscript><div><img src="https://mc.yandex.ru/watch/104129761" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+  <noscript><div><img src="https://top-fwz1.mail.ru/counter?id=3769671;js=na" style="position:absolute;left:-9999px;" alt="Top.Mail.Ru" /></div></noscript>
+</body>
+
+</html>
